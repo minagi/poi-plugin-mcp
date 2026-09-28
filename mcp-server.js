@@ -59,6 +59,18 @@ const fs = require('fs')
 const http = require('http')
 const packageJson = require('./package.json')
 const {
+  MCP_TOOL_DEFINITIONS,
+  McpToolInputError,
+  decodePoiResources,
+  formatAirbaseStatus,
+  formatQuests,
+  searchEquipment,
+  searchShips,
+  validateFleetStatusArgs,
+  validateGetAllArgs,
+  validateNoArguments,
+} = require('./lib/mcp-tools')
+const {
   collectFleetMetricShips,
   inspectFleetMetrics,
   moraleMeaning,
@@ -97,6 +109,10 @@ function fetchFromPoi(endpoint) {
       let data = ''
       res.on('data', chunk => data += chunk)
       res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`POI data API returned HTTP ${res.statusCode}`))
+          return
+        }
         try { resolve(JSON.parse(data)) } catch (e) { reject(e) }
       })
     }).on('error', reject).setTimeout(10000, function() {
@@ -152,34 +168,6 @@ async function fetchMasterData() {
     return await fetchFromPoi('/master')
   } catch (_) {
     return { ships: {}, equipment: {}, shipTypes: {}, equipmentTypes: {} }
-  }
-}
-
-function enrichShip(ship, master) {
-  const masterShip = master.ships && master.ships[ship.api_ship_id]
-  const shipType = masterShip && master.shipTypes && master.shipTypes[masterShip.api_stype]
-
-  return {
-    ...ship,
-    instanceId: ship.api_id,
-    masterId: ship.api_ship_id,
-    name: (masterShip && masterShip.api_name) || '',
-    typeName: (shipType && shipType.api_name) || '',
-  }
-}
-
-function enrichEquipment(equip, master) {
-  const masterEquip = master.equipment && master.equipment[equip.api_slotitem_id]
-  const typeIds = masterEquip && Array.isArray(masterEquip.api_type) ? masterEquip.api_type : []
-  const typeId = typeIds[2] || typeIds[1] || typeIds[0]
-  const equipType = typeId && master.equipmentTypes && master.equipmentTypes[typeId]
-
-  return {
-    ...equip,
-    instanceId: equip.api_id,
-    masterId: equip.api_slotitem_id,
-    name: (masterEquip && masterEquip.api_name) || '',
-    typeName: (equipType && equipType.api_name) || '',
   }
 }
 
@@ -285,8 +273,7 @@ const JSONRPC_VERSION = '2.0'
 let reqId = 0
 
 function send(id, result, error) {
-  const msg = { jsonrpc: JSONRPC_VERSION }
-  if (id != null) msg.id = id
+  const msg = { jsonrpc: JSONRPC_VERSION, id: id ?? null }
   if (error) msg.error = { code: error.code || -32603, message: error.message }
   else msg.result = result
   process.stdout.write(JSON.stringify(msg) + '\n')
@@ -331,6 +318,7 @@ async function main() {
 
   const toolHandlers = {
     get_fleet_status: async (args) => {
+      validateFleetStatusArgs(args)
       const fleets = await fetchFromPoi('/fleets')
       if (!Array.isArray(fleets)) return { error: 'No fleet data' }
       const fleet = fleets[args.fleetId - 1]
@@ -359,34 +347,40 @@ async function main() {
     },
 
     search_ships: async (args) => {
-      const ships = await fetchFromPoi('/ships')
-      const master = await fetchMasterData()
-      const results = Object.values(ships).filter(s => {
-        if (!s) return false
-        if (args.minLevel != null && s.api_lv < args.minLevel) return false
-        if (args.maxLevel != null && s.api_lv > args.maxLevel) return false
-        if (args.minMorale != null && s.api_cond < args.minMorale) return false
-        return true
-      }).map(s => enrichShip(s, master))
-      return { total: results.length, ships: results }
+      const [ships, fleets, master] = await Promise.all([
+        fetchFromPoi('/ships'),
+        fetchFromPoi('/fleets'),
+        fetchFromPoi('/master'),
+      ])
+      return searchShips(args, { ships, fleets, master })
     },
 
     search_equipment: async (args) => {
-      const equips = await fetchFromPoi('/equipment')
-      const master = await fetchMasterData()
-      const results = Object.values(equips).filter(e => {
-        if (!e) return false
-        if (args.minLevel != null && (e.api_level || 0) < args.minLevel) return false
-        return true
-      }).map(e => enrichEquipment(e, master))
-      return { total: results.length, equipment: results }
+      const [equipment, ships, master] = await Promise.all([
+        fetchFromPoi('/equipment'),
+        fetchFromPoi('/ships'),
+        fetchFromPoi('/master'),
+      ])
+      return searchEquipment(args, { equipment, ships, master })
     },
 
-    get_resources: async () => {
-      return await fetchFromPoi('/resources')
+    get_resources: async (args) => {
+      validateNoArguments(args)
+      return decodePoiResources(await fetchFromPoi('/resources'))
+    },
+
+    get_quests: async (args) => {
+      validateNoArguments(args)
+      return formatQuests(await fetchFromPoi('/quests'))
+    },
+
+    get_airbase_status: async (args) => {
+      validateNoArguments(args)
+      return formatAirbaseStatus(await fetchFromPoi('/airbase'))
     },
 
     get_all: async (args) => {
+      validateGetAllArgs(args)
       return await fetchAllData(args)
     }
   }
@@ -407,8 +401,14 @@ async function main() {
     buffer = lines.pop() || ''
     for (const line of lines) {
       if (!line.trim()) continue
+      let req
       try {
-        const req = JSON.parse(line)
+        req = JSON.parse(line)
+      } catch (error) {
+        send(null, null, { code: -32700, message: error.message })
+        continue
+      }
+      try {
         const { id, method, params } = req
 
         switch (method) {
@@ -455,57 +455,7 @@ async function main() {
 
           case 'tools/list':
             send(id, {
-              tools: [
-                {
-                  name: 'get_fleet_status',
-                  description: '读取一支舰队：舰名、装备、补强、速度、士气、33式索敌、制空。看一队时不要用 get_all。',
-                  inputSchema: {
-                    type: 'object',
-                    properties: { fleetId: { type: 'number', description: '舰队编号 1-4' } },
-                    required: ['fleetId']
-                  }
-                },
-                {
-                  name: 'search_ships',
-                  description: '搜索舰娘',
-                  inputSchema: {
-                    type: 'object',
-                    properties: {
-                      minLevel: { type: 'number' },
-                      maxLevel: { type: 'number' },
-                      minMorale: { type: 'number', description: '最低士气(闪)' }
-                    }
-                  }
-                },
-                {
-                  name: 'search_equipment',
-                  description: '搜索装备',
-                  inputSchema: {
-                    type: 'object',
-                    properties: {
-                      minLevel: { type: 'number', description: '最低改修★' }
-                    }
-                  }
-                },
-                {
-                  name: 'get_resources',
-                  description: '获取资源概况',
-                  inputSchema: { type: 'object', properties: {} }
-                },
-                {
-                  name: 'get_all',
-                  description: '整包账号转储。读一队请用 get_fleet_status；资源用 get_resources。',
-                  inputSchema: {
-                    type: 'object',
-                    properties: {
-                      include: {
-                        type: 'array',
-                        items: { type: 'string', enum: ['master', 'event', 'planner'] }
-                      }
-                    }
-                  }
-                }
-              ]
+              tools: MCP_TOOL_DEFINITIONS
             })
             break
 
@@ -525,8 +475,11 @@ async function main() {
           default:
             send(id, null, { code: -32601, message: `Unknown method: ${method}` })
         }
-      } catch (err) {
-        // Malformed JSON — ignore
+      } catch (error) {
+        send(req && req.id, null, {
+          code: error instanceof McpToolInputError ? -32602 : -32603,
+          message: error.message,
+        })
       }
     }
   })

@@ -148,6 +148,8 @@ checkpoints/
   再访问 Poi 的本地数据 API。
 
 两种方式都要求 Poi 正在运行且插件已加载。
+HTTP MCP 与 stdio MCP 共用同一套工具定义、搜索和结果整形。相同工具和输入应返回
+语义相同、结构相同的结果。
 
 ### HTTP MCP
 
@@ -213,10 +215,50 @@ args = []
 | 工具 | 用途 |
 |---|---|
 | `get_fleet_status` | 按 `fleetId`（1-4）读取一支舰队：舰名、装备、补强、速度、士气、33式索敌（Cn 1–4）、制空。看一队时不要用 `get_all` |
-| `search_ships` | 按可选的 `minLevel`、`maxLevel`、`minMorale` 筛选持有舰娘 |
-| `search_equipment` | 按可选的 `minLevel` 筛选持有装备 |
-| `get_resources` | 读取具名资源。Poi 数组下标 4=高速建造材（喷火）、5=高速修复材（桶）。HTTP `/resources` 仍是 8 元数组 |
+| `search_ships` | 筛选持有舰娘，并以实例 ID 做 keyset 分页 |
+| `search_equipment` | 筛选或汇总持有装备，并以实例 ID 做 keyset 分页 |
+| `get_resources` | 名前付きの資源情報を取得。順序は燃料、弾薬、鋼材、ボーキサイト、高速建造材、高速修復材、開発資材、改修資材。HTTP `/resources` は従来どおり8要素のraw配列 |
+| `get_quests` | 返回 Poi store 持有的受注任务 `activeQuests` 与任务进度 `records`；不是当前出现的全部任务列表 |
+| `get_airbase_status` | 原样返回 Poi store 的基地航空队数组，不补充名称；包装为 `{ source, enriched: false, airbase }` |
 | `get_all` | 整包账号转储。优先 `get_fleet_status` / `search_*` / `get_resources`；`include` 可选 `master`、`event`、`planner` |
+
+`search_ships` 可组合使用 `name`、`masterId` / `masterIds`、`stype` / `stypes`、
+`minLevel` / `maxLevel`、`minMorale` / `maxMorale`、`locked`、`inFleet`、
+`fleetId`、`sallyArea`、`hasExpansion`、`limit`、`cursor`。不同条件之间是 AND；
+同一 ID 条件的单数与复数形式取并集。`fleetId` 隐含 `inFleet:true`，不能与
+`inFleet:false` 同时指定。名称会 trim、做 Unicode NFC 规范化，并以不区分大小写
+的普通子串匹配，不使用正则表达式。
+
+`search_equipment` 可组合使用 `name`、`masterId` / `masterIds`、`typeId` /
+`typeIds`、`minLevel` / `maxLevel`（0–10）、`locked`、`equipped`、`limit`、
+`cursor`、`summary`。其单复数 ID 条件也取并集，其余条件使用 AND。默认
+`limit` 为 100，上限为 200；`search_ships` 采用相同的默认值和上限。
+
+`summary:true` 会在分页前对全部匹配装备计算 `total`、锁定/未锁定数、装备中/
+未装备数、按改修值计数以及按 master ID 分组的同类统计。未明确指定 `limit` 时，
+`limit` 默认为 0 且 `equipment` 返回空数组，避免向模型发送全部实例；明确指定
+1–200 时可同时取得汇总和一页实例。`summary:false` 时不能使用 `limit:0`。
+
+`equipped` 和 `equippedOn` 只检查舰娘 `api_slot` 中的正实例 ID 及 `api_slot_ex`
+中的正实例 ID。补强增设的 0 表示未开孔、负值表示已开孔但为空。基地航空队不在
+判定范围内，因此 `equipped:false` 只表示装备不在舰娘普通槽或补强增设中，不能
+解释为包含基地航空队在内的“完全未使用”。结果中的 `equippedScope` 会明确返回：
+
+```json
+{
+  "normalShipSlots": true,
+  "expansionSlots": true,
+  "airbase": false
+}
+```
+
+两种搜索都按实例 ID 升序返回，`cursor` 是包含版本、工具名、上一实例 ID 与规范化
+筛选哈希的不透明 base64url 值。修改筛选条件或把 cursor 用于另一工具会得到输入
+错误；`limit` 与 `summary` 不参与筛选哈希。数据来自实时 Poi store，分页期间若
+持有数据发生变化，不保证得到完整 snapshot。
+
+stdio MCP 的 `get_resources` 返回值采用与 HTTP MCP 相同的具名对象；原始8元数组
+仍完整保存在 `.raw`。这与旧版stdio MCP直接返回raw数组的形式不兼容。
 
 ## MCP 资源
 
