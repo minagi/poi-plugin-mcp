@@ -1,0 +1,32 @@
+{
+  "name": "poi-plugin-mcp",
+  "version": "0.2.29",
+  "description": "Poi data, WebView capture, and opt-in authenticated input bridge for local KanColle tools.",
+  "main": "index.js",
+  "keywords": [
+    "poi-plugin",
+    "kancolle",
+    "mcp"
+  ],
+  "files": [
+    "index.js",
+    "lib",
+    "mcp-server.js",
+    "README.md"
+  ],
+  "bin": {
+    "poi-mcp": "mcp-server.js"
+  },
+  "scripts": {
+    "start": "node mcp-server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "poiPlugin": {
+    "title": "MCP 数据桥",
+    "id": "mcp_data_bridge",
+    "description": "Expose Poi state, in-memory game WebView captures, and opt-in authenticated input on a local bridge.",
+    "icon": "fa/database",
+    "priority": 53
+  },
+  "license": "MIT"
+}
