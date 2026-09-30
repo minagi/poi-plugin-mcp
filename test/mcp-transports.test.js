@@ -9,6 +9,34 @@ const { after, before, test } = require('node:test')
 const { createPoiDataBridge } = require('../lib/poi-http-bridge')
 const { createStoreFixture } = require('./fixtures')
 
+const BATTLE_TELEMETRY = {
+  available: true,
+  generation: 7,
+  status: 'in_progress',
+  observed: {
+    capturedAt: '2026-09-30T00:00:00.000Z',
+    path: '/kcsapi/api_req_sortie/battle',
+    time: 123,
+    phaseStartHp: {
+      friendlyMain: [-1, 30],
+      friendlyEscort: [],
+      enemyMain: [-1, 20],
+      enemyEscort: [],
+    },
+  },
+  official: null,
+}
+
+const ACTION_EVENTS = [
+  { generation: 3, capturedAt: '2026-09-30T00:00:03.000Z', path: '/kcsapi/api_req_quest/start', apiResult: 1, postBody: { api_quest_id: 101 }, responseSummary: {} },
+  { generation: 4, capturedAt: '2026-09-30T00:00:04.000Z', path: '/kcsapi/api_req_quest/stop', apiResult: 1, postBody: { api_quest_id: 101 }, responseSummary: {} },
+]
+
+const API_RESPONSES = [
+  { generation: 8, capturedAt: '2026-09-30T00:00:08.000Z', path: '/kcsapi/api_get_member/questlist', apiResult: 1, postBody: { api_token: '[REDACTED]' }, responseBody: { api_list: [] }, truncated: false },
+  { generation: 9, capturedAt: '2026-09-30T00:00:09.000Z', path: '/kcsapi/api_port/port', apiResult: 1, postBody: {}, responseBody: { api_ship: [] }, truncated: false },
+]
+
 let bridge
 let bridgePort
 let temporaryHome
@@ -18,7 +46,33 @@ before(async () => {
   temporaryHome = fs.mkdtempSync(path.join(os.tmpdir(), 'poi-mcp-characterization-'))
   const portFile = path.join(temporaryHome, '.poi-mcp', 'port')
   bridge = createPoiDataBridge({
-    getStore: () => createStoreFixture(),
+    getStore: () => {
+      const store = createStoreFixture()
+      store.ext = {
+        'poi-plugin-prophet': {
+          _: { battle: { sortieState: 2, result: { rank: 'A', mvp: [0, null] } } },
+        },
+      }
+      return store
+    },
+    getBattleTelemetry: () => BATTLE_TELEMETRY,
+    getActionEvents: ({ after = 0, limit = 64 } = {}) => ({
+      available: true,
+      sessionId: 'fixture-action-session',
+      earliestGeneration: 3,
+      latestGeneration: 4,
+      events: ACTION_EVENTS.filter((event) => event.generation > after).slice(0, limit),
+    }),
+    getApiResponses: ({ after = 0, limit = 64, path: apiPath } = {}) => ({
+      available: true,
+      sessionId: 'fixture-api-session',
+      earliestGeneration: 8,
+      latestGeneration: 9,
+      retainedBytes: 100,
+      responses: API_RESPONSES
+        .filter((response) => response.generation > after && (!apiPath || response.path === apiPath))
+        .slice(0, limit),
+    }),
     port: 0,
     portFile,
     logger: { log() {}, error() {} },
@@ -47,6 +101,9 @@ test('HTTP MCP characterizes the published tools', async () => {
       'get_quests',
       'get_airbase_status',
       'get_all',
+      'get_battle',
+      'get_action_events',
+      'get_kcsapi_responses',
     ],
   )
 
@@ -87,6 +144,9 @@ test('stdio MCP characterizes the published tools with the shared resource resul
       'get_quests',
       'get_airbase_status',
       'get_all',
+      'get_battle',
+      'get_action_events',
+      'get_kcsapi_responses',
     ],
   )
 
@@ -150,6 +210,43 @@ test('HTTP and stdio searches have equivalent extended results', async () => {
   )
 })
 
+test('HTTP and stdio expose the same retained battle state', async () => {
+  const httpBattle = await callHttpTool('get_battle')
+  const stdioBattle = await stdio.callTool('get_battle')
+  assert.deepEqual(stdioBattle, httpBattle)
+  assert.equal(httpBattle.generation, 7)
+  assert.equal(httpBattle.status, 'in_progress')
+  assert.equal(httpBattle.predicted.available, true)
+  assert.equal(Object.hasOwn(httpBattle, 'active'), false)
+  assert.equal(Object.hasOwn(httpBattle, 'current'), false)
+  assert.equal(Object.hasOwn(httpBattle, 'isCurrent'), false)
+})
+
+test('HTTP and stdio action event pagination and session metadata are equal', async () => {
+  const args = { after: 2, sessionId: 'previous-session', limit: 1 }
+  const httpEvents = await callHttpTool('get_action_events', args)
+  const stdioEvents = await stdio.callTool('get_action_events', args)
+  assert.deepEqual(stdioEvents, httpEvents)
+  assert.equal(httpEvents.returned, 1)
+  assert.equal(httpEvents.hasMore, true)
+  assert.equal(httpEvents.nextAfter, 3)
+  assert.equal(httpEvents.sessionChanged, true)
+  assert.equal(httpEvents.cursorLost, true)
+})
+
+test('HTTP and stdio KCSAPI responses are equal and never expose postBody', async () => {
+  const args = {
+    apiPath: '/kcsapi/api_get_member/questlist',
+    sessionId: 'fixture-api-session',
+  }
+  const httpResponses = await callHttpTool('get_kcsapi_responses', args)
+  const stdioResponses = await stdio.callTool('get_kcsapi_responses', args)
+  assert.deepEqual(stdioResponses, httpResponses)
+  assert.equal(httpResponses.returned, 1)
+  assert.equal(httpResponses.sessionChanged, false)
+  assert.equal(Object.hasOwn(httpResponses.responses[0], 'postBody'), false)
+})
+
 test('HTTP and stdio return JSON-RPC errors for parse and invalid params failures', async () => {
   const malformedHttp = await postHttpBody('{')
   assert.equal(malformedHttp.error.code, -32700)
@@ -171,6 +268,14 @@ test('HTTP and stdio return JSON-RPC errors for parse and invalid params failure
   )
   await assert.rejects(
     stdio.callTool('does_not_exist'),
+    (error) => error.code === -32602,
+  )
+  await assert.rejects(
+    callHttpTool('get_battle', { unexpected: true }),
+    (error) => error.code === -32602,
+  )
+  await assert.rejects(
+    stdio.callTool('get_kcsapi_responses', { apiPath: '/not-kcsapi/value' }),
     (error) => error.code === -32602,
   )
 })

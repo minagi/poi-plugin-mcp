@@ -221,6 +221,9 @@ args = []
 | `get_quests` | 返回 Poi store 持有的受注任务 `activeQuests` 与任务进度 `records`；不是当前出现的全部任务列表 |
 | `get_airbase_status` | 原样返回 Poi store 的基地航空队数组，不补充名称；包装为 `{ source, enriched: false, airbase }` |
 | `get_all` | 整包账号转储。优先 `get_fleet_status` / `search_*` / `get_resources`；`include` 可选 `master`、`event`、`planner` |
+| `get_battle` | Poiが現在または最後に保持している単一の戦闘状態を取得。戦闘履歴ではなく、Prophet予測は任意 |
+| `get_action_events` | 成功したKCSAPI操作イベントをgeneration順に取得。`after` / `sessionId` / `limit`に対応 |
+| `get_kcsapi_responses` | 必須の完全一致`apiPath`について、保持中のKCSAPIレスポンスを安全なサイズで取得 |
 
 `search_ships` 可组合使用 `name`、`masterId` / `masterIds`、`stype` / `stypes`、
 `minLevel` / `maxLevel`、`minMorale` / `maxMorale`、`locked`、`inFleet`、
@@ -259,6 +262,28 @@ args = []
 
 stdio MCP 的 `get_resources` 返回值采用与 HTTP MCP 相同的具名对象；原始8元数组
 仍完整保存在 `.raw`。这与旧版stdio MCP直接返回raw数组的形式不兼容。
+
+`get_battle` はbattle historyではなく、Poiが現在または最後に保持した1件の戦闘状態を
+返す。`status: "in_progress"` が残っていても、戦闘結果を捕捉できなかった場合などは
+現在戦闘中とは限らず、staleな可能性がある。`poi-plugin-prophet` の予測は任意であり、
+Prophetが存在しないことはエラーではない。
+
+`get_action_events` はin-memory ring bufferからgeneration昇順で返す。`after` の既定値は
+0、`limit`は既定20・最大64。レスポンスの`sessionId`を次回入力へ渡すと、Poiプロセス
+再起動などによる`sessionChanged`を検出できる。`cursorLost`は、session変更、未来cursor、
+または指定した`after`より新しいeventの一部が256件のring bufferから脱落したことを示す。
+cursor lossと空結果はいずれも正常レスポンスである。長時間待機する
+`/action-events/wait`はMCP Toolとして公開しない。
+
+`get_kcsapi_responses` の`apiPath`は必須で、`/kcsapi/`から始まる完全一致pathだけを受け付ける。
+prefix・substring・regex・wildcard検索は行わない。`after`の既定値は0、`limit`は既定3・
+最大10。requestの`postBody`はMCP結果へ一切含めない。各`responseBody`はJSONで256 KiB、
+Tool結果全体は1 MiBを上限とし、超過するbodyだけをnullにして`bodyOmitted: true`とする。
+entry metadataは残り、buffer保存時点で既に切り詰められた場合は`storageTruncated: true`で
+区別される。path filterはglobal generationを共有するため、`cursorLost: true`は脱落範囲に
+指定pathのresponseも含まれていた可能性を示し、実際の脱落を断定するものではない。
+raw KCSAPI dataには艦娘・装備instance IDなどアカウント固有情報が含まれ得る。
+汎用`POST /query`、WebView storage/path/find、long-pollは通常MCP Toolへ公開しない。
 
 ## MCP 资源
 
@@ -300,6 +325,7 @@ poi://all
 | `GET /battle` | 已观测战斗数据、结算与简化战斗状态 |
 | `GET /action-events` | 已捕获的成功游戏 API 动作事件（支持 `after` / `limit` 游标） |
 | `GET /action-events/wait` | 有新动作时立即返回，否则在 `timeoutMs`（1-60000）内事件驱动等待；超时返回 `timedOut: true` 心跳 |
+| `GET /api-responses` | 捕捉済みKCSAPIレスポンス（`after` / `limit` / 完全一致`path`） |
 | `GET /all` | 基础运行数据汇总 |
 | `POST /query` | 带 Bearer token 的通用只读查询：Poi store、任意已捕获 kcsapi、Poi JSON 缓存、游戏 frame/storage/属性路径 |
 | `GET /debug/status` | 带 Bearer token 读取危险 WebView eval 开关状态 |

@@ -62,12 +62,16 @@ const {
   MCP_TOOL_DEFINITIONS,
   McpToolInputError,
   decodePoiResources,
+  formatActionEvents,
   formatAirbaseStatus,
+  formatKcsapiResponses,
   formatQuests,
   searchEquipment,
   searchShips,
+  validateActionEventsArgs,
   validateFleetStatusArgs,
   validateGetAllArgs,
+  validateKcsapiResponsesArgs,
   validateNoArguments,
 } = require('./lib/mcp-tools')
 const {
@@ -382,6 +386,36 @@ async function main() {
     get_all: async (args) => {
       validateGetAllArgs(args)
       return await fetchAllData(args)
+    },
+
+    get_battle: async (args) => {
+      validateNoArguments(args)
+      return await fetchFromPoi('/battle')
+    },
+
+    get_action_events: async (args) => {
+      const input = validateActionEventsArgs(args)
+      const query = new URLSearchParams({
+        after: String(input.after),
+        limit: String(input.limit + 1),
+      })
+      return formatActionEvents(
+        args,
+        await fetchFromPoi(`/action-events?${query.toString()}`),
+      )
+    },
+
+    get_kcsapi_responses: async (args) => {
+      const input = validateKcsapiResponsesArgs(args)
+      const query = new URLSearchParams({
+        after: String(input.after),
+        limit: String(input.limit + 1),
+        path: input.apiPath,
+      })
+      return formatKcsapiResponses(
+        args,
+        await fetchFromPoi(`/api-responses?${query.toString()}`),
+      )
     }
   }
 
