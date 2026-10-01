@@ -1,6 +1,6 @@
 {
   "name": "poi-plugin-mcp",
-  "version": "0.2.29",
+  "version": "0.2.29-minagi.1",
   "description": "Poi data, WebView capture, and opt-in authenticated input bridge for local KanColle tools.",
   "main": "index.js",
   "keywords": [
