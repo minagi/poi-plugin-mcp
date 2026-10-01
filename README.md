@@ -219,6 +219,7 @@ args = []
 | `search_equipment` | 筛选或汇总持有装备，并以实例 ID 做 keyset 分页 |
 | `get_resources` | 名前付きの資源情報を取得。順序は燃料、弾薬、鋼材、ボーキサイト、高速建造材、高速修復材、開発資材、改修資材。HTTP `/resources` は従来どおり8要素のraw配列 |
 | `get_quests` | 返回 Poi store 持有的受注任务 `activeQuests` 与任务进度 `records`；不是当前出现的全部任务列表 |
+| `get_available_quests` | ゲームの「全任務」タブから最後に取得した新鮮な任務一覧。未受注・受注中・達成済みを含む |
 | `get_airbase_status` | 原样返回 Poi store 的基地航空队数组，不补充名称；包装为 `{ source, enriched: false, airbase }` |
 | `get_all` | 整包账号转储。优先 `get_fleet_status` / `search_*` / `get_resources`；`include` 可选 `master`、`event`、`planner` |
 | `get_battle` | Poiが現在または最後に保持している単一の戦闘状態を取得。戦闘履歴ではなく、Prophet予測は任意 |
@@ -259,6 +260,29 @@ args = []
 筛选哈希的不透明 base64url 值。修改筛选条件或把 cursor 用于另一工具会得到输入
 错误；`limit` 与 `summary` 不参与筛选哈希。数据来自实时 Poi store，分页期间若
 持有数据发生变化，不保证得到完整 snapshot。
+
+`get_available_quests` は、KCSAPI `api_get_member/questlist` のうち
+`api_tab_id=0`（全任務タブ）の正常な最新レスポンスだけを単一snapshotとして保持する。
+画面内のページ送りはクライアント側表示であり、ページ別・個別タブ別のcacheは作らない。
+返却対象はゲームがその時点で表示した未受注（state 1）、受注中（state 2）、達成済みで
+報酬受領待ち（state 3）の任務である。条件未達で表示されない任務、過去の任務履歴、
+全master任務一覧は含まない。Poi storeの受注任務と進捗記録を返す既存`get_quests`とは
+用途が異なる。
+
+snapshotは取得から5分、または次の05:00 JSTの早い方で失効する。任務の受注・解除・
+報酬受領、およびゲームのbootstrap/reconnectを観測した場合も直ちにstaleとなる。
+staleまたは未取得の場合は古い任務本文を返さず、`available:false`、空の`quests`、
+`refreshHint`を返す。更新するにはゲームで「全任務」タブを開くか再表示する。
+ToolがWebViewを操作したり、任務を自動受注・解除・完了したりすることはない。
+
+入力は`questId` / `questIds`、`state` / `states`、`type` / `types`、`category` /
+`categories`、`invalidFlag` / `invalidFlags`、`limit`、`cursor`、`summary`に対応する。
+異なる種類のfilterはAND、同じ種類の単数形と複数形は和集合である。通常の`limit`は
+既定50・最大100。`summary:true`で`limit`を省略するとsummary-onlyとなり、明示した
+場合はsummaryと任務pageを同時に返す。summaryはpagination前の一致集合をstate、type、
+category、invalidFlag別に集計する。cursorはsession、snapshot generation、最後のquest ID、
+filter hashを含むopaque base64urlで、snapshot更新後は先頭から取得し直す必要がある。
+TTLまたは05:00 JST到達で途中pageが失効した場合はcursor errorではなくstale結果を返す。
 
 stdio MCP 的 `get_resources` 返回值采用与 HTTP MCP 相同的具名对象；原始8元数组
 仍完整保存在 `.raw`。这与旧版stdio MCP直接返回raw数组的形式不兼容。
@@ -317,6 +341,7 @@ poi://all
 | `GET /equipment` | 持有装备实例 |
 | `GET /resources` | 当前资源 |
 | `GET /quests` | 当前任务与任务记录 |
+| `GET /available-quests` | 全任務タブから捕捉したcanonical snapshot（stdio MCP内部用、読み取り専用） |
 | `GET /airbase` | 基地航空队 |
 | `GET /names` | 舰娘、装备和远征名称映射 |
 | `GET /master` | 舰娘、装备、类型、远征等主数据 |

@@ -64,11 +64,13 @@ const {
   decodePoiResources,
   formatActionEvents,
   formatAirbaseStatus,
+  formatAvailableQuests,
   formatKcsapiResponses,
   formatQuests,
   searchEquipment,
   searchShips,
   validateActionEventsArgs,
+  validateAvailableQuestsArgs,
   validateFleetStatusArgs,
   validateGetAllArgs,
   validateKcsapiResponsesArgs,
@@ -376,6 +378,14 @@ async function main() {
     get_quests: async (args) => {
       validateNoArguments(args)
       return formatQuests(await fetchFromPoi('/quests'))
+    },
+
+    get_available_quests: async (args) => {
+      validateAvailableQuestsArgs(args)
+      return formatAvailableQuests(
+        args,
+        await fetchFromPoi('/available-quests'),
+      )
     },
 
     get_airbase_status: async (args) => {

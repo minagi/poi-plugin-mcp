@@ -5,6 +5,7 @@ const { createSettingsClass } = require('./lib/settings-view')
 const telemetry = createPoiTelemetry()
 const controller = createBridgeController({
   getQuestList: telemetry.getQuestList,
+  getAvailableQuestSnapshot: telemetry.getAvailableQuestSnapshot,
   getMissionBoard: telemetry.getMissionBoard,
   getQuestAction: telemetry.getQuestAction,
   getEquipmentAction: telemetry.getEquipmentAction,

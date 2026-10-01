@@ -7,7 +7,10 @@ const { spawn } = require('node:child_process')
 const { after, before, test } = require('node:test')
 
 const { createPoiDataBridge } = require('../lib/poi-http-bridge')
-const { createStoreFixture } = require('./fixtures')
+const {
+  createAvailableQuestSnapshotFixture,
+  createStoreFixture,
+} = require('./fixtures')
 
 const BATTLE_TELEMETRY = {
   available: true,
@@ -37,6 +40,8 @@ const API_RESPONSES = [
   { generation: 9, capturedAt: '2026-09-30T00:00:09.000Z', path: '/kcsapi/api_port/port', apiResult: 1, postBody: {}, responseBody: { api_ship: [] }, truncated: false },
 ]
 
+const AVAILABLE_QUEST_SNAPSHOT = createAvailableQuestSnapshotFixture({ count: 80 })
+
 let bridge
 let bridgePort
 let temporaryHome
@@ -56,6 +61,7 @@ before(async () => {
       return store
     },
     getBattleTelemetry: () => BATTLE_TELEMETRY,
+    getAvailableQuestSnapshot: () => AVAILABLE_QUEST_SNAPSHOT,
     getActionEvents: ({ after = 0, limit = 64 } = {}) => ({
       available: true,
       sessionId: 'fixture-action-session',
@@ -99,6 +105,7 @@ test('HTTP MCP characterizes the published tools', async () => {
       'search_equipment',
       'get_resources',
       'get_quests',
+      'get_available_quests',
       'get_airbase_status',
       'get_all',
       'get_battle',
@@ -142,6 +149,7 @@ test('stdio MCP characterizes the published tools with the shared resource resul
       'search_equipment',
       'get_resources',
       'get_quests',
+      'get_available_quests',
       'get_airbase_status',
       'get_all',
       'get_battle',
@@ -194,6 +202,37 @@ test('HTTP and stdio expose identical quest and raw airbase tools', async () => 
   assert.deepEqual(stdioAirbase, httpAirbase)
   assert.equal(httpAirbase.enriched, false)
   assert.equal(httpAirbase.airbase[0].unknownFixtureField, 'kept')
+})
+
+test('HTTP and stdio expose identical available quest filtering and summary', async () => {
+  const args = {
+    state: 1,
+    states: [2],
+    types: [1, 2],
+    summary: true,
+    limit: 5,
+  }
+  const httpQuests = await callHttpTool('get_available_quests', args)
+  const stdioQuests = await stdio.callTool('get_available_quests', args)
+  assert.deepEqual(stdioQuests, httpQuests)
+  assert.equal(httpQuests.available, true)
+  assert.equal(httpQuests.returned, 5)
+  assert.ok(httpQuests.summary.total >= httpQuests.returned)
+  assert.equal(Object.hasOwn(httpQuests.quests[0], 'api_no'), false)
+  assert.equal(JSON.stringify(httpQuests).includes('api_tab_id'), false)
+  assert.equal(JSON.stringify(httpQuests).includes('api_verno'), false)
+  assert.equal(JSON.stringify(httpQuests).includes('postBody'), false)
+})
+
+test('available quests local endpoint is GET-only and exposes the bounded snapshot contract', async () => {
+  const getResponse = await requestBridgeJson('/available-quests', 'GET')
+  assert.equal(getResponse.statusCode, 200)
+  assert.equal(getResponse.body.sourceTabId, 0)
+  assert.equal(getResponse.body.quests.length, 80)
+  assert.equal(Object.hasOwn(getResponse.body, 'postBody'), false)
+
+  const postResponse = await requestBridgeJson('/available-quests', 'POST')
+  assert.equal(postResponse.statusCode, 405)
 })
 
 test('HTTP and stdio searches have equivalent extended results', async () => {
@@ -374,6 +413,30 @@ function postHttpBody(body, port = bridgePort) {
     })
     request.on('error', reject)
     request.end(body)
+  })
+}
+
+function requestBridgeJson(requestPath, method, port = bridgePort) {
+  return new Promise((resolve, reject) => {
+    const request = http.request({
+      hostname: '127.0.0.1',
+      port,
+      path: requestPath,
+      method,
+    }, (response) => {
+      let data = ''
+      response.setEncoding('utf8')
+      response.on('data', (chunk) => { data += chunk })
+      response.on('end', () => {
+        try {
+          resolve({ statusCode: response.statusCode, body: JSON.parse(data) })
+        } catch (error) {
+          reject(error)
+        }
+      })
+    })
+    request.on('error', reject)
+    request.end()
   })
 }
 
