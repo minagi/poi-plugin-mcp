@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "name": "MCP Integration",
+    "description": "View Poi fleet, equipment, resource, quest, and other data from external tools through MCP."
+  },
+  "settings": {
+    "sections": {
+      "service": "MCP service",
+      "input": "Input and recording",
+      "integrations": "External plugin integrations"
+    },
+    "port": {
+      "label": "Port",
+      "description": "HTTP/MCP service listening port. Usually no change is needed.",
+      "apply": "Apply",
+      "saved": "Port saved"
+    },
+    "service": {
+      "label": "Service",
+      "description": "Starts or stops the MCP service.",
+      "start": "Start",
+      "stop": "Stop",
+      "started": "Started",
+      "stopped": "Stopped",
+      "running": "Running on 127.0.0.1:{{port}}",
+      "notRunning": "Stopped"
+    },
+    "input": {
+      "label": "WebView input",
+      "description": "Sends input to the game screen. It is not needed for read-only use.",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enabledMessage": "WebView input enabled",
+      "disabledMessage": "WebView input disabled"
+    },
+    "recording": {
+      "label": "Record play",
+      "description": "Records operations, screenshots, and related responses. It does not replay input.",
+      "enabledMessage": "Play recording enabled",
+      "disabledMessage": "Play recording disabled",
+      "disabled": "Disabled",
+      "recording": "Recording - splits after 5 min idle",
+      "starting": "Starting recording session",
+      "armed": "Armed - starts on game mouse activity",
+      "waiting": "Armed - waiting for game WebView",
+      "paused": "Paused: {{reason}}",
+      "path": "Recording: {{path}}"
+    },
+    "debugEval": {
+      "label": "Debug eval",
+      "description": "For diagnostics. It can run arbitrary JavaScript, so leave it off for normal use.",
+      "enabled": "DANGEROUS: authenticated arbitrary code can run in the game WebView",
+      "disabled": "Disabled (recommended)",
+      "enabledMessage": "Dangerous WebView eval enabled",
+      "disabledMessage": "Dangerous WebView eval disabled"
+    }
+  },
+  "integrations": {
+    "use": "Use integration",
+    "enabledMessage": "{{name}} integration enabled",
+    "disabledMessage": "{{name}} integration disabled",
+    "status": {
+      "detected": "Detected",
+      "notDetected": "Not detected",
+      "disabled": "Disabled in Poi",
+      "loading": "Waiting for Poi to load plugins",
+      "error": "Plugin load error"
+    },
+    "akashicRecords": {
+      "name": "Logbook (Akashic Records)",
+      "description": "Uses Logbook data in read-only mode."
+    }
+  }
+}

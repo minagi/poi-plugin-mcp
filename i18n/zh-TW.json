@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "name": "MCP 資料橋",
+    "description": "透過 MCP 從外部工具查看 Poi 的艦隊、裝備、資源、任務等資訊。"
+  }
+}

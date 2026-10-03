@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "name": "MCP 数据桥",
+    "description": "通过 MCP 从外部工具查看 Poi 的舰队、装备、资源、任务等信息。"
+  }
+}

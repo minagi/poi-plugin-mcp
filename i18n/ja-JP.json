@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "name": "MCP連携",
+    "description": "Poiの艦隊・装備・資源・任務などの情報を、MCP経由で外部ツールから参照できます。"
+  },
+  "settings": {
+    "sections": {
+      "service": "MCPサービス",
+      "input": "入力・操作記録",
+      "integrations": "外部プラグイン連携"
+    },
+    "port": {
+      "label": "ポート",
+      "description": "HTTP/MCPサービスの待受ポート。通常は変更不要です。",
+      "apply": "適用",
+      "saved": "ポートを保存しました"
+    },
+    "service": {
+      "label": "サービス",
+      "description": "MCPサービスを開始・停止します。",
+      "start": "開始",
+      "stop": "停止",
+      "started": "サービスを開始しました",
+      "stopped": "サービスを停止しました",
+      "running": "127.0.0.1:{{port}} で稼働中",
+      "notRunning": "停止中"
+    },
+    "input": {
+      "label": "WebView入力",
+      "description": "ゲーム画面へ入力を送信します。参照のみの利用では不要です。",
+      "enabled": "有効",
+      "disabled": "無効",
+      "enabledMessage": "WebView入力を有効にしました",
+      "disabledMessage": "WebView入力を無効にしました"
+    },
+    "recording": {
+      "label": "操作記録",
+      "description": "操作・画面・関連レスポンスを記録します。入力の再生は行いません。",
+      "enabledMessage": "操作記録を有効にしました",
+      "disabledMessage": "操作記録を無効にしました",
+      "disabled": "無効",
+      "recording": "記録中（5分間操作がなければ区切ります）",
+      "starting": "記録セッションを開始中",
+      "armed": "待機中（ゲーム操作で記録を開始します）",
+      "waiting": "待機中（ゲームWebViewの読み込み待ち）",
+      "paused": "一時停止: {{reason}}",
+      "path": "保存先: {{path}}"
+    },
+    "debugEval": {
+      "label": "デバッグ実行",
+      "description": "調査用機能です。任意のJavaScriptを実行できるため、通常はOFFにしてください。",
+      "enabled": "危険: 認証済みの任意コードをゲームWebViewで実行できます",
+      "disabled": "無効（推奨）",
+      "enabledMessage": "危険なWebViewデバッグ実行を有効にしました",
+      "disabledMessage": "WebViewデバッグ実行を無効にしました"
+    }
+  },
+  "integrations": {
+    "use": "連携を利用する",
+    "enabledMessage": "{{name}}連携を有効にしました",
+    "disabledMessage": "{{name}}連携を無効にしました",
+    "status": {
+      "detected": "検出済み",
+      "notDetected": "未検出",
+      "disabled": "Poiで無効",
+      "loading": "プラグイン読み込み待ち",
+      "error": "読み込みエラー"
+    },
+    "akashicRecords": {
+      "name": "航海日誌（Akashic Records）",
+      "description": "航海日誌のデータを読み取り専用で利用します。"
+    }
+  }
+}

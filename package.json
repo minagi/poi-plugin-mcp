@@ -10,6 +10,7 @@
   ],
   "files": [
     "index.js",
+    "i18n",
     "lib",
     "mcp-server.js",
     "README.md"
@@ -22,10 +23,11 @@
     "test": "node --test test/*.test.js"
   },
   "poiPlugin": {
-    "title": "MCP 数据桥",
+    "title": "meta.name",
     "id": "mcp_data_bridge",
-    "description": "Expose Poi state, in-memory game WebView captures, and opt-in authenticated input on a local bridge.",
+    "description": "meta.description",
     "icon": "fa/database",
+    "i18nDir": "./i18n",
     "priority": 53
   },
   "license": "MIT"
