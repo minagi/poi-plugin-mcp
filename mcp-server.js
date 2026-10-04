@@ -128,6 +128,61 @@ function fetchFromPoi(endpoint) {
   })
 }
 
+function callPoiMcpTool(name, args) {
+  return new Promise((resolve, reject) => {
+    const port = getPoiPort()
+    if (!port) {
+      reject(new Error('POI data API not found.'))
+      return
+    }
+    const body = JSON.stringify({
+      jsonrpc: '2.0',
+      id: `stdio-${name}`,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    })
+    const request = http.request({
+      hostname: '127.0.0.1',
+      port,
+      path: '/mcp',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (response) => {
+      let data = ''
+      response.on('data', (chunk) => { data += chunk })
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`POI MCP API returned HTTP ${response.statusCode}`))
+          return
+        }
+        try {
+          const message = JSON.parse(data)
+          if (message.error) {
+            const error = message.error.code === -32602
+              ? new McpToolInputError(message.error.message)
+              : new Error(message.error.message)
+            reject(error)
+            return
+          }
+          const text = message.result && message.result.content &&
+            message.result.content[0] && message.result.content[0].text
+          resolve(JSON.parse(text))
+        } catch (error) {
+          reject(error)
+        }
+      })
+    })
+    request.on('error', reject)
+    request.setTimeout(10000, () => {
+      request.destroy(new Error('Request timed out'))
+    })
+    request.end(body)
+  })
+}
+
 function getInjectScript() {
   return [
     '(function(){',
@@ -374,6 +429,8 @@ async function main() {
       validateNoArguments(args)
       return decodePoiResources(await fetchFromPoi('/resources'))
     },
+
+    get_resource_history: async (args) => callPoiMcpTool('get_resource_history', args),
 
     get_quests: async (args) => {
       validateNoArguments(args)

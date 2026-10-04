@@ -300,12 +300,13 @@ test('row normalization rejects coercive non-number values', () => {
   assert.deepEqual(result.history, [])
 })
 
-test('3B does not add an MCP tool', () => {
+test('3C adds resource history as the twelfth MCP tool', () => {
   assert.deepEqual(MCP_TOOL_DEFINITIONS.map(({ name }) => name), [
     'get_fleet_status',
     'search_ships',
     'search_equipment',
     'get_resources',
+    'get_resource_history',
     'get_quests',
     'get_available_quests',
     'get_airbase_status',

@@ -8,6 +8,9 @@ const { after, before, test } = require('node:test')
 
 const { createPoiDataBridge } = require('../lib/poi-http-bridge')
 const {
+  AKASHIC_RESOURCE_DATA_PATH,
+} = require('../lib/integrations/akashic-records')
+const {
   createAvailableQuestSnapshotFixture,
   createStoreFixture,
 } = require('./fixtures')
@@ -46,20 +49,40 @@ let bridge
 let bridgePort
 let temporaryHome
 let stdio
+let akashicIntegrationEnabled = true
 
 before(async () => {
   temporaryHome = fs.mkdtempSync(path.join(os.tmpdir(), 'poi-mcp-characterization-'))
   const portFile = path.join(temporaryHome, '.poi-mcp', 'port')
+  const store = createStoreFixture()
+  store.ext = {
+    'poi-plugin-prophet': {
+      _: { battle: { sortieState: 2, result: { rank: 'A', mvp: [0, null] } } },
+    },
+  }
+  const resourceHistory = [
+    resourceHistoryRow('2026-09-02T00:00:00Z', 130),
+    resourceHistoryRow('2026-09-01T12:00:00Z', 90),
+    resourceHistoryRow('2026-09-01T00:00:00Z', 100),
+  ]
   bridge = createPoiDataBridge({
-    getStore: () => {
-      const store = createStoreFixture()
-      store.ext = {
-        'poi-plugin-prophet': {
-          _: { battle: { sortieState: 2, result: { rank: 'A', mvp: [0, null] } } },
-        },
+    getStore: (storePath) => {
+      if (storePath === 'plugins') {
+        return [
+          { packageName: 'poi-plugin-mcp', enabled: true, isRead: true },
+          {
+            packageName: 'poi-plugin-akashic-records',
+            enabled: true,
+            isRead: true,
+          },
+        ]
       }
+      if (storePath === AKASHIC_RESOURCE_DATA_PATH) return resourceHistory
       return store
     },
+    getSettings: () => ({
+      integrations: { akashicRecords: { enabled: akashicIntegrationEnabled } },
+    }),
     getBattleTelemetry: () => BATTLE_TELEMETRY,
     getAvailableQuestSnapshot: () => AVAILABLE_QUEST_SNAPSHOT,
     getActionEvents: ({ after = 0, limit = 64 } = {}) => ({
@@ -104,6 +127,7 @@ test('HTTP MCP characterizes the published tools', async () => {
       'search_ships',
       'search_equipment',
       'get_resources',
+      'get_resource_history',
       'get_quests',
       'get_available_quests',
       'get_airbase_status',
@@ -117,6 +141,10 @@ test('HTTP MCP characterizes the published tools', async () => {
   const resources = await callHttpTool('get_resources')
   assert.deepEqual(resources.raw, [1000, 2000, 3000, 4000, 5, 6, 7, 8])
   assert.deepEqual(resources.fuel, { key: 'fuel', label: '燃料', raw: 1000 })
+
+  const historyTool = listed.tools.find(({ name }) => name === 'get_resource_history')
+  assert.equal(historyTool.inputSchema.properties.hours.default, 168)
+  assert.equal(historyTool.inputSchema.properties.maxPoints.maximum, 500)
 
   const ships = await callHttpTool('search_ships', { minLevel: 50 })
   assert.equal(ships.total, 1)
@@ -148,6 +176,7 @@ test('stdio MCP characterizes the published tools with the shared resource resul
       'search_ships',
       'search_equipment',
       'get_resources',
+      'get_resource_history',
       'get_quests',
       'get_available_quests',
       'get_airbase_status',
@@ -189,6 +218,42 @@ test('HTTP and stdio get_resources results are deeply equal', async () => {
   const httpResources = await callHttpTool('get_resources')
   const stdioResources = await stdio.callTool('get_resources')
   assert.deepEqual(stdioResources, httpResources)
+})
+
+test('HTTP and stdio expose identical resource history summaries', async () => {
+  const args = {
+    start: '2026-09-01T00:00:00Z',
+    end: '2026-09-02T00:00:00Z',
+    includeSeries: true,
+    maxPoints: 2,
+  }
+  const httpHistory = await callHttpTool('get_resource_history', args)
+  const stdioHistory = await stdio.callTool('get_resource_history', args)
+
+  assert.deepEqual(stdioHistory, httpHistory)
+  assert.equal(httpHistory.state, 'available')
+  assert.equal(httpHistory.sampleCount, 3)
+  assert.equal(httpHistory.resources.fuel.delta, 30)
+  assert.equal(httpHistory.seriesReturnedCount, 2)
+})
+
+test('resource history reads the latest integration setting on every call', async () => {
+  const args = {
+    start: '2026-09-01T00:00:00Z',
+    end: '2026-09-02T00:00:00Z',
+  }
+
+  try {
+    akashicIntegrationEnabled = false
+    assert.equal((await callHttpTool('get_resource_history', args)).state, 'disabled')
+    assert.equal((await stdio.callTool('get_resource_history', args)).state, 'disabled')
+
+    akashicIntegrationEnabled = true
+    assert.equal((await callHttpTool('get_resource_history', args)).state, 'available')
+    assert.equal((await stdio.callTool('get_resource_history', args)).state, 'available')
+  } finally {
+    akashicIntegrationEnabled = true
+  }
 })
 
 test('HTTP and stdio expose identical quest and raw airbase tools', async () => {
@@ -414,6 +479,20 @@ function postHttpBody(body, port = bridgePort) {
     request.on('error', reject)
     request.end(body)
   })
+}
+
+function resourceHistoryRow(timestamp, value) {
+  return [
+    Date.parse(timestamp),
+    value,
+    value,
+    value,
+    value,
+    value,
+    value,
+    value,
+    value,
+  ]
 }
 
 function requestBridgeJson(requestPath, method, port = bridgePort) {

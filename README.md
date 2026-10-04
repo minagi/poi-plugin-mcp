@@ -250,6 +250,7 @@ args = []
 | `search_ships` | 筛选持有舰娘，并以实例 ID 做 keyset 分页 |
 | `search_equipment` | 筛选或汇总持有装备，并以实例 ID 做 keyset 分页 |
 | `get_resources` | 名前付きの資源情報を取得。順序は燃料、弾薬、鋼材、ボーキサイト、高速建造材、高速修復材、開発資材、改修資材。HTTP `/resources` は従来どおり8要素のraw配列 |
+| `get_resource_history` | 航海日誌の資源snapshotを期間指定で集計し、純増減・観測された増減・最小/最大などを取得 |
 | `get_quests` | 返回 Poi store 持有的受注任务 `activeQuests` 与任务进度 `records`；不是当前出现的全部任务列表 |
 | `get_available_quests` | ゲームの「全任務」タブから最後に取得した新鮮な任務一覧。未受注・受注中・達成済みを含む |
 | `get_airbase_status` | 原样返回 Poi store 的基地航空队数组，不补充名称；包装为 `{ source, enriched: false, airbase }` |
@@ -257,6 +258,14 @@ args = []
 | `get_battle` | Poiが現在または最後に保持している単一の戦闘状態を取得。戦闘履歴ではなく、Prophet予測は任意 |
 | `get_action_events` | 成功したKCSAPI操作イベントをgeneration順に取得。`after` / `sessionId` / `limit`に対応 |
 | `get_kcsapi_responses` | 必須の完全一致`apiPath`について、保持中のKCSAPIレスポンスを安全なサイズで取得 |
+
+`get_resource_history` を利用するには、設定画面で航海日誌連携をONにする必要がある。
+データは航海日誌がPoi Redux stateへ読み込んだsnapshotであり、ファイルを直接読み取らない。
+snapshotは母港情報 `/kcsapi/api_port/port` を観測し、前回保存した時間帯から変わったときに
+保存される。固定タイマーではなく1時間帯あたり最大1件で、母港情報を取得しない時間帯は
+欠測し得る。`observedIncrease` / `observedDecrease` は隣接snapshot間で観測された増減の
+合計で、実際の収入・消費総額ではない。資源回復ペース、イベント期間、戦果稼ぎ期間などの
+事実確認に利用できるが、予測やおすすめ遠征の判断は行わない。
 
 `search_ships` 可组合使用 `name`、`masterId` / `masterIds`、`stype` / `stypes`、
 `minLevel` / `maxLevel`、`minMorale` / `maxMorale`、`locked`、`inFleet`、

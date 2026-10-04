@@ -253,6 +253,7 @@ test('controller saves integration opt-in without restarting the existing servic
   let starts = 0
   let stops = 0
   let runningPort = 0
+  let getBridgeSettings = null
   const controller = createBridgeController({
     settingsPath,
     inputToken: 'test-input-token',
@@ -262,19 +263,22 @@ test('controller saves integration opt-in without restarting the existing servic
       isRead: true,
       version: '8.3.2',
     }],
-    createBridge: ({ port }) => ({
-      async start() {
-        starts += 1
-        runningPort = port
-      },
-      async stop() {
-        stops += 1
-        runningPort = 0
-      },
-      getPort() {
-        return runningPort
-      },
-    }),
+    createBridge: ({ port, getSettings }) => {
+      getBridgeSettings = getSettings
+      return {
+        async start() {
+          starts += 1
+          runningPort = port
+        },
+        async stop() {
+          stops += 1
+          runningPort = 0
+        },
+        getPort() {
+          return runningPort
+        },
+      }
+    },
   })
   t.after(() => controller.unload())
 
@@ -285,11 +289,26 @@ test('controller saves integration opt-in without restarting the existing servic
 
   assert.equal(starts, 1)
   assert.equal(stops, 0)
+  assert.equal(getBridgeSettings().integrations.akashicRecords.enabled, true)
   assert.equal(getIntegrationStatuses(controller.getSettings(), () => [OWNER, {
     packageName: AKASHIC.packageName,
     enabled: true,
     isRead: true,
   }]).akashicRecords.canRead, true)
+
+  await controller.applySettings({
+    integrations: { akashicRecords: { enabled: false } },
+  })
+  assert.equal(starts, 1)
+  assert.equal(stops, 0)
+  assert.equal(getBridgeSettings().integrations.akashicRecords.enabled, false)
+
+  await controller.applySettings({
+    integrations: { akashicRecords: { enabled: true } },
+  })
+  assert.equal(starts, 1)
+  assert.equal(stops, 0)
+  assert.equal(getBridgeSettings().integrations.akashicRecords.enabled, true)
   assert.equal(loadSettings(settingsPath).integrations.akashicRecords.enabled, true)
 })
 
