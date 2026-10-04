@@ -1,7 +1,19 @@
 {
   "name": "poi-plugin-mcp",
-  "version": "0.2.29-minagi.2",
+  "version": "0.2.30-minagi.1",
   "description": "Poi data, WebView capture, and opt-in authenticated input bridge for local KanColle tools.",
+  "author": {
+    "name": "Minagi Tohno",
+    "url": "https://github.com/minagi"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/minagi/poi-plugin-mcp.git"
+  },
+  "homepage": "https://github.com/minagi/poi-plugin-mcp",
+  "bugs": {
+    "url": "https://github.com/minagi/poi-plugin-mcp/issues"
+  },
   "main": "index.js",
   "keywords": [
     "poi-plugin",
@@ -13,7 +25,11 @@
     "i18n",
     "lib",
     "mcp-server.js",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE.md",
+    "docs/RECORDING.md",
+    "docs/UPSTREAM_README.md"
   ],
   "bin": {
     "poi-mcp": "mcp-server.js"
