@@ -26,6 +26,8 @@ Poiで保持している艦隊・艦娘・装備・資源・任務などの情�
 
 ## 主な機能
 
+- [Versioned inventory snapshots and store-change events](docs/INVENTORY.md): `get_inventory_snapshot` / `get_inventory_events` and read-only HTTP long polling
+
 - Poi storeにある艦隊、艦娘、装備、資源、任務、基地航空隊、master dataなどの参照
 - 艦娘・装備の絞り込み、summary、keyset pagination
 - 全任務tabから取得した任務snapshotの参照

@@ -29,6 +29,7 @@
     "LICENSE",
     "NOTICE.md",
     "docs/RECORDING.md",
+    "docs/INVENTORY.md",
     "docs/UPSTREAM_README.md"
   ],
   "bin": {

@@ -66,6 +66,7 @@ before(async () => {
     resourceHistoryRow('2026-09-01T00:00:00Z', 100),
   ]
   bridge = createPoiDataBridge({
+    getReduxStore: () => ({ getState: () => store, subscribe: () => () => {} }),
     getStore: (storePath) => {
       if (storePath === 'plugins') {
         return [
@@ -123,6 +124,8 @@ test('HTTP MCP characterizes the published tools', async () => {
   assert.deepEqual(
     listed.tools.map((tool) => tool.name),
     [
+      'get_inventory_snapshot',
+      'get_inventory_events',
       'get_fleet_status',
       'search_ships',
       'search_equipment',
@@ -172,6 +175,8 @@ test('stdio MCP characterizes the published tools with the shared resource resul
   assert.deepEqual(
     listed.tools.map((tool) => tool.name),
     [
+      'get_inventory_snapshot',
+      'get_inventory_events',
       'get_fleet_status',
       'search_ships',
       'search_equipment',
@@ -267,6 +272,17 @@ test('HTTP and stdio expose identical quest and raw airbase tools', async () => 
   assert.deepEqual(stdioAirbase, httpAirbase)
   assert.equal(httpAirbase.enriched, false)
   assert.equal(httpAirbase.airbase[0].unknownFixtureField, 'kept')
+})
+
+test('HTTP and stdio inventory tools expose identical fences and records', async () => {
+  const httpSnapshot = await callHttpTool('get_inventory_snapshot')
+  const stdioSnapshot = await stdio.callTool('get_inventory_snapshot')
+  assert.equal(httpSnapshot.available, true)
+  assert.equal(stdioSnapshot.sessionId, httpSnapshot.sessionId)
+  assert.equal(stdioSnapshot.revision, httpSnapshot.revision)
+  assert.deepEqual(stdioSnapshot.sources, httpSnapshot.sources)
+  const args = { after: httpSnapshot.revision, sessionId: httpSnapshot.sessionId, limit: 256 }
+  assert.deepEqual(await stdio.callTool('get_inventory_events', args), await callHttpTool('get_inventory_events', args))
 })
 
 test('HTTP and stdio expose identical available quest filtering and summary', async () => {

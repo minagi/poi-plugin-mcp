@@ -300,8 +300,10 @@ test('row normalization rejects coercive non-number values', () => {
   assert.deepEqual(result.history, [])
 })
 
-test('3C adds resource history as the twelfth MCP tool', () => {
+test('resource history and inventory tools are advertised', () => {
   assert.deepEqual(MCP_TOOL_DEFINITIONS.map(({ name }) => name), [
+    'get_inventory_snapshot',
+    'get_inventory_events',
     'get_fleet_status',
     'search_ships',
     'search_equipment',

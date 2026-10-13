@@ -70,6 +70,7 @@ const {
   searchEquipment,
   searchShips,
   validateActionEventsArgs,
+  validateInventoryEventsArgs,
   validateAvailableQuestsArgs,
   validateFleetStatusArgs,
   validateGetAllArgs,
@@ -458,6 +459,17 @@ async function main() {
     get_battle: async (args) => {
       validateNoArguments(args)
       return await fetchFromPoi('/battle')
+    },
+
+    get_inventory_snapshot: async (args) => {
+      validateNoArguments(args)
+      return await fetchFromPoi('/inventory/snapshot')
+    },
+    get_inventory_events: async (args) => {
+      const input = validateInventoryEventsArgs(args)
+      const query = new URLSearchParams({ after: String(input.after), limit: String(input.limit) })
+      if (input.sessionId) query.set('sessionId', input.sessionId)
+      return await fetchFromPoi(`/inventory/events?${query}`)
     },
 
     get_action_events: async (args) => {
